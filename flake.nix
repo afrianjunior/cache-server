@@ -22,6 +22,8 @@
         buildPhase = ''
           export HOME=$(pwd)
           export GOCACHE=$(mktemp -d)
+          export GOPROXY=https://goproxy.io
+
           mkdir -p $GOCACHE
           cd src
           go build -o $out/bin/cache-server main.go
