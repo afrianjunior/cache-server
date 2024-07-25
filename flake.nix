@@ -6,7 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils }: 
     flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ] (system:
     let
       pkgs = import nixpkgs { inherit system; };
@@ -18,18 +18,24 @@
         src = ./.;
         buildInputs = [ pkgs.go ];
 
-        installPhase = ''
-          mkdir -p $out/bin
-          ls -la
+        # Set GOCACHE environment variable to a writable directory
+        buildPhase = ''
+          export GOCACHE=$(mktemp -d)
+          mkdir -p $GOCACHE
           cd src
           go build -o $out/bin/cache-server main.go
-          cp config.json $out/bin/
+        '';
+
+        installPhase = ''
+          mkdir -p $out/bin
+          cp ./config.json $out/bin/config.json
+          ls $out/bin
         '';
 
         meta = with pkgs.lib; {
           description = "A simple NixOS cache server using Go";
           license = licenses.mit;
-          maintainers = [ maintainers.yourGitHubHandle ];
+          maintainers = [ ];
         };
       };
 
@@ -79,7 +85,7 @@
           };
 
           security.acme.certs."rasp.local" = {
-            email = "your-email@example.com"; # Replace with your email
+            email = "afrian.junior26@gmail.com"; # Replace with your email
             webroot = "/var/www";
           };
         };
