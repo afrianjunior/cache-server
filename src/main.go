@@ -1,40 +1,75 @@
-// src/main.go
 package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
+	"sync"
 )
 
-type Config struct {
-	Port     string `json:"port"`
-	CacheDir string `json:"cache_dir"`
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello, NixOS Cache Server!")
-}
+var (
+	cache = make(map[string]string)
+	mutex = &sync.RWMutex{}
+)
 
 func main() {
-	file, err := os.Open("./config.json")
-	if err != nil {
-		log.Fatalf("Error opening config file: %v", err)
+	http.HandleFunc("/get", getHandler)
+	http.HandleFunc("/set", setHandler)
+
+	log.Println("Cache server is running on port 8080...")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatalf("Server failed: %v", err)
 	}
-	defer file.Close()
+}
 
-	byteValue, _ := ioutil.ReadAll(file)
-	var config Config
-	json.Unmarshal(byteValue, &config)
-
-	if config.Port == "" {
-		config.Port = "8080"
+func getHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
 	}
 
-	fmt.Printf("Starting server on port %s with cache directory %s\n", config.Port, config.CacheDir)
-	http.HandleFunc("/", handler)
-	http.ListenAndServe("127.0.0.1:"+config.Port, nil)
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		http.Error(w, "Key is required", http.StatusBadRequest)
+		return
+	}
+
+	mutex.RLock()
+	value, exists := cache[key]
+	mutex.RUnlock()
+
+	if !exists {
+		http.Error(w, "Key not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"key": key, "value": value})
+}
+
+func setHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	key, keyExists := body["key"]
+	value, valueExists := body["value"]
+
+	if !keyExists || !valueExists {
+		http.Error(w, "Key and value are required", http.StatusBadRequest)
+		return
+	}
+
+	mutex.Lock()
+	cache[key] = value
+	mutex.Unlock()
+
+	w.WriteHeader(http.StatusNoContent)
 }
