@@ -22,7 +22,7 @@
         buildPhase = ''
           export HOME=$(pwd)
           export GOCACHE=$(mktemp -d)
-          export GOPROXY=https://goproxy.io
+          export GOPROXY=direct
 
           mkdir -p $GOCACHE
           cd src
